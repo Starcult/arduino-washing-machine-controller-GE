@@ -1,4 +1,4 @@
-Project Overview
+#Project Overview
 
 This project uses an Arduino microcontroller to control and automate a washing machine system.
 
