@@ -1,6 +1,6 @@
 # Arduino Washing Machine Controller
 
-An Arduino-based washing machine control system developed to replace or modify the original control logic of a washing machine.
+An Arduino-based washing machine control system developed to replace or modify the original control logic of a GE washing machine.
 
 ## Project Overview
 
