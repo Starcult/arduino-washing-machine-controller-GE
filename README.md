@@ -1,133 +1,376 @@
 # Arduino Washing Machine Controller
 
-An Arduino-based washing machine control system developed to replace or modify the original control logic of a GE washing machine.
+A custom Arduino-based washing machine controller developed to replace and automate the control logic of a washing machine.
+
+The project implements a complete washing cycle using an Arduino, relay outputs, water-level sensors, an LCD interface, and push-button controls.
 
 ## Project Overview
 
-This project uses an Arduino microcontroller as the main control unit for a washing machine.
-
-The controller is responsible for managing the washing cycle and coordinating multiple inputs and outputs according to the programmed sequence.
-
-The project was developed as a hands-on embedded control and automation project, involving:
-
-* Microcontroller programming
-* Digital input/output control
-* Timing and sequencing
-* Hardware interfacing
-* Relay/output control
-* Safety interlocks
-* Troubleshooting and testing
-
-## System Architecture
+The controller manages the complete washing process through a sequence of operating states:
 
 ```text
-                    ┌─────────────────┐
-                    │     User Input  │
-                    │ Buttons / Switch│
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │     Arduino     │
-                    │ Main Controller │
-                    └────────┬────────┘
-                             │
-             ┌───────────────┼───────────────┐
-             │               │               │
-             ▼               ▼               ▼
-        Water Control    Motor Control   Drain Control
-             │               │               │
-             └───────────────┼───────────────┘
-                             │
-                             ▼
-                    Washing Machine
+WASH
+  ↓
+SOAK
+  ↓
+DRAIN
+  ↓
+SPIN
+  ↓
+RINSE
+  ↓
+DRAIN
+  ↓
+SPIN
+  ↓
+COMPLETE
 ```
 
-## Features
+The controller continuously monitors water-level sensors and controls the washing-machine actuators according to the current cycle state.
 
-* Automated washing-cycle control
-* Sequential control of washing-machine functions
-* Digital input monitoring
-* Digital output control
-* Timed operations
-* Safety/interlock logic
-* Microcontroller-based control architecture
+The firmware was developed as a hands-on embedded control and automation project.
+
+## Main Features
+
+* Arduino-based washing machine control
+* 16×2 LCD user interface
+* Push-button power and start/pause control
+* Water-level monitoring
+* Automatic water filling
+* Washing motor control
+* Spin motor control
+* Drain pump control
+* Automatic cycle sequencing
+* Wash / soak / rinse / spin timing
+* Pause and resume functionality
+* Water-fill timeout protection
+* Cycle timer display
+* Relay-based output control
 
 ## Hardware
 
-The project uses an Arduino microcontroller together with the required interface circuitry for the washing machine.
+### Controller
 
-Typical system components include:
+* Arduino
+* 16×2 LCD Keypad Shield
+* Relay outputs
+* Water-level sensors
+* Push buttons
+* Status LEDs
 
-| Component                 | Function                        |
-| ------------------------- | ------------------------------- |
-| Arduino                   | Main controller                 |
-| Input switches/sensors    | User input and status detection |
-| Relay/interface circuitry | Control of external loads       |
-| Water valve               | Water supply control            |
-| Drain pump                | Water drainage                  |
-| Motor control             | Washing/spinning operation      |
-| Door/interlock circuit    | Safety control                  |
+The LCD interface uses the Arduino LCD Keypad Shield configuration from the DFRobot Arduino LCD KeyPad Shield example.
 
-> **Note:** The exact hardware configuration depends on the washing machine used in this project.
+### Washing Machine Outputs
 
-## Software
+The controller operates the following outputs:
 
-**Platform:** Arduino
+| Output     | Arduino Pin | Function          |
+| ---------- | ----------: | ----------------- |
+| Wash Motor |          A2 | Washing/agitation |
+| Spin Motor |          A3 | Spin operation    |
+| Drain Pump |          A0 | Drain water       |
+| Fill Valve |          A1 | Fill water        |
 
-**Programming Language:** C/C++
+The relay outputs use active-low logic:
 
-The controller program handles the washing sequence, monitors inputs, controls outputs, and manages timing between different stages of the cycle.
+```cpp
+#define Relay_ON  LOW
+#define Relay_OFF HIGH
+```
+
+### Inputs
+
+| Input            | Arduino Pin | Function                     |
+| ---------------- | ----------: | ---------------------------- |
+| Low Water Level  |          A4 | Detect low water level       |
+| High Water Level |          A5 | Detect full/high water level |
+| Power Button     |          D2 | Power / cycle selection      |
+| Start Button     |         D10 | Start / pause / resume       |
+
+The water-level inputs and buttons use `INPUT_PULLUP`.
+
+### LCD
+
+The 16×2 LCD uses:
+
+```text
+RS = D8
+EN = D9
+D4 = D4
+D5 = D5
+D6 = D6
+D7 = D7
+```
+
+The LCD is initialized as a 16-column × 2-row display.
 
 ## Washing Cycle
 
-The overall control sequence can be represented as:
+### 1. Water Filling
+
+The controller checks the water-level sensors and activates the fill valve when the water level is low.
+
+A maximum filling timeout is also implemented.
 
 ```text
-              ┌─────────┐
-              │  IDLE   │
-              └────┬────┘
-                   │
-                   ▼
-              ┌─────────┐
-              │  FILL   │
-              └────┬────┘
-                   │
-                   ▼
-              ┌─────────┐
-              │  WASH   │
-              └────┬────┘
-                   │
-                   ▼
-              ┌─────────┐
-              │  DRAIN  │
-              └────┬────┘
-                   │
-                   ▼
-              ┌─────────┐
-              │  RINSE  │
-              └────┬────┘
-                   │
-                   ▼
-              ┌─────────┐
-              │  SPIN   │
-              └────┬────┘
-                   │
-                   ▼
-              ┌─────────┐
-              │COMPLETE │
-              └─────────┘
+Low Water Level
+       ↓
+ Fill Valve ON
+       ↓
+High Water Level
+       ↓
+ Fill Valve OFF
 ```
 
-The actual sequence and control conditions are defined by the firmware.
+The fill timeout is set to 6 minutes.
 
-## Hardware Interface
+### 2. Wash
 
-The Arduino interfaces with the washing-machine hardware through appropriate electrical interface circuitry.
+Once the required water level is reached, the wash motor is activated.
 
-The controller should **not directly connect Arduino GPIO pins to mains-powered loads**.
+The initial wash interval is configured for 8 minutes.
 
-Where high-voltage or high-current devices are involved, suitable isolation and switching hardware must be used.
+### 3. Soak
+
+After the first wash period, the motor stops and the controller enters a soak period.
+
+```text
+Wash
+ ↓
+Motor OFF
+ ↓
+Soak
+ ↓
+Second Wash
+```
+
+The soak interval is configured for 2 minutes.
+
+### 4. Drain
+
+After washing, the controller stops the wash motor and activates the drain pump.
+
+The controller also monitors the low-water sensor to determine when draining has sufficiently completed.
+
+### 5. Spin
+
+Once the water level is sufficiently low, the controller transitions to spin.
+
+The spin sequence includes:
+
+1. Stop wash motor
+2. Activate drain pump
+3. Start spin motor
+4. Continue spinning for the configured interval
+
+The temporary spin/drain transition uses a short delay before enabling the spin motor.
+
+### 6. Rinse
+
+The rinse cycle refills the machine, runs the wash motor, and then proceeds to the next drain/spin stage.
+
+The rinse interval is configured for 8 minutes.
+
+### 7. Final Spin
+
+The final spin stage runs for the configured spin interval.
+
+When the cycle is complete, the controller:
+
+* Stops the motors
+* Stops the timers
+* Clears the LCD
+* Displays `Done`
+* Turns the machine off
+
+## Cycle Timing
+
+The firmware defines the following timing parameters:
+
+| Operation          | Duration |
+| ------------------ | -------: |
+| Water Fill Timeout |    6 min |
+| Wash               |    8 min |
+| Soak               |    2 min |
+| Rinse              |    8 min |
+| Drain              |    2 min |
+| Temporary Spin     |    2 min |
+| Final Spin         |    8 min |
+
+These values are defined as configurable constants in the firmware.
+
+## Control Architecture
+
+The firmware uses a state-based control structure.
+
+Major operating modes include:
+
+```text
+ModeOff
+ModeFilling
+ModeWash
+ModeRinse
+ModeSpin
+ModeDrain
+ModeSoak
+ModeNext
+ModeFinish
+ModeFilled
+ModeChkWaterLow
+```
+
+Within each major cycle, `NextStep` is used to determine the current stage of the operation.
+
+This allows the controller to transition between:
+
+```text
+Filling
+   ↓
+Washing
+   ↓
+Soaking
+   ↓
+Draining
+   ↓
+Water Level Check
+   ↓
+Spinning
+   ↓
+Next Cycle
+```
+
+## Pause / Resume
+
+The Start button is used to control the running state of the washing cycle.
+
+The firmware supports:
+
+```text
+RUNNING
+   ↓
+PAUSE
+   ↓
+RESUME
+```
+
+The controller uses separate timers for the running cycle and total cycle time.
+
+When paused, the timers are paused and the outputs are switched to the appropriate safe/off state.
+
+## User Interface
+
+The LCD displays the selected cycle and current operating state.
+
+Examples include:
+
+```text
+WASH 45mins
+Washing..
+
+RINSE 18mins
+Rinse..
+
+Spin 10mins
+Spin..
+
+Filling...
+Drain..
+Soak..
+Finshing...
+```
+
+The LCD also displays the elapsed cycle time in `MM:SS` format.
+
+## Software Architecture
+
+The main control functions are separated into individual functions:
+
+```text
+setup()
+   │
+   └── Initialize hardware
+
+loop()
+   │
+   ├── detectPowerBtn()
+   ├── detectStartBtn()
+   ├── updateLCD()
+   │
+   └── Cycle Controller
+          │
+          ├── Wash()
+          ├── Rinse()
+          └── Spin()
+                 │
+                 └── WaterFills()
+
+OFFMode()
+   │
+   └── Safely disable controlled outputs
+```
+
+The main loop selects the appropriate cycle function based on `ModeSelected`.
+
+## Timing and State Management
+
+The project uses the `Timer` library together with Arduino timing functions.
+
+Two timers are maintained:
+
+```cpp
+Timer RunningTimer;
+Timer TotalTimer;
+```
+
+`RunningTimer` is used to track the active operation while `TotalTimer` tracks the overall cycle time.
+
+This allows the controller to support pause/resume behavior without simply restarting the cycle.
+
+## Engineering Challenges
+
+### Coordinating Multiple Actuators
+
+The washing machine contains several independently controlled components:
+
+* Fill valve
+* Wash motor
+* Spin motor
+* Drain pump
+
+The firmware must ensure that these components operate in the correct sequence.
+
+### Water-Level Control
+
+Two water-level inputs are used:
+
+* Low-level detection
+* High-level detection
+
+These signals determine when filling should begin, when filling should stop, and when draining has progressed sufficiently.
+
+### Cycle State Management
+
+The washing process is not a single timed operation.
+
+Different stages have different conditions and timing requirements. The firmware therefore maintains a current mode and next-step state to control transitions.
+
+### Pause / Resume
+
+The controller needs to stop the machine safely while preserving the current cycle timing.
+
+The timer state is therefore used to distinguish between:
+
+```text
+STOPPED
+RUNNING
+PAUSED
+```
+
+### Hardware Interface
+
+The Arduino operates as the low-voltage control system while the washing-machine components require separate switching/interface circuitry.
+
+Relay outputs are used to interface the Arduino with the controlled devices.
 
 ## Project Structure
 
@@ -157,81 +400,46 @@ arduino-washing-machine-controller/
 └── CHANGELOG.md
 ```
 
-## Engineering Challenges
-
-### Control Sequencing
-
-A washing machine requires multiple operations to occur in a controlled sequence.
-
-The controller therefore needs to coordinate different outputs while monitoring the corresponding inputs and conditions.
-
-### Timing
-
-Different stages of the washing cycle require different operating times.
-
-The firmware manages these timing requirements to ensure that each stage operates for the required duration.
-
-### Safety
-
-Safety conditions are an important part of the controller design.
-
-For example, motor operation should only be permitted when the required safety conditions are satisfied.
-
-### Hardware Interface
-
-The Arduino operates at low-voltage logic levels while some washing-machine components operate at significantly higher voltages and currents.
-
-Interface and isolation circuitry are therefore required between the microcontroller and external loads.
-
-## Testing
-
-Testing was performed by verifying individual functions before integrating them into the complete washing cycle.
-
-Testing areas include:
-
-* Input detection
-* Output switching
-* Timing
-* Washing-cycle sequencing
-* Safety/interlock conditions
-* Motor operation
-* Water filling
-* Drain operation
-
-## Lessons Learned
-
-This project provided practical experience with:
-
-* Embedded C/C++ programming
-* Arduino microcontrollers
-* Digital I/O
-* Hardware interfacing
-* Control logic
-* Timing and sequencing
-* Electrical troubleshooting
-* System integration
-* Real-world automation
-
 ## Project Status
 
-**Status:** Completed / In Development
+**Status:** Completed
 
 **Platform:** Arduino
 
+**Language:** C/C++
+
 **Project Type:** Embedded Control / Automation
 
-## Safety Notice
+## Skills Demonstrated
 
-This project involves electrical and mechanical equipment.
+This project demonstrates practical experience in:
 
-Washing machines may contain **dangerous mains voltages and high-current components**.
+* Embedded C/C++
+* Arduino programming
+* Digital I/O
+* Relay control
+* Sensor interfacing
+* Water-level detection
+* State-based control
+* Timing systems
+* LCD user interfaces
+* Button handling
+* Embedded troubleshooting
+* Automation
+* Hardware/software integration
 
-Do not reproduce the electrical connections without understanding the relevant electrical safety requirements. Use appropriate isolation, fusing, switching devices, enclosures, grounding, and other protective measures.
+## Safety
 
-This project documentation is provided for educational and portfolio purposes.
+This project interfaces with a washing machine and may involve mains voltage, high-current loads, rotating machinery, water, and electrical hazards.
+
+The Arduino should **never be connected directly to mains-powered loads**.
+
+Appropriate electrical isolation, relay/interface circuitry, fusing, grounding, enclosure, and other applicable safety measures must be used.
+
+This repository documents the control software and engineering project for educational and portfolio purposes.
 
 ## Author
 
 **Marco**
 
-Hands-on embedded electronics and automation project.
+Embedded Electronics & Automation Project
